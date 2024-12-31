@@ -19,6 +19,8 @@ import 'package:paintroid/ui/pages/landing_page/components/image_preview.dart';
 import 'package:paintroid/ui/pages/landing_page/components/main_overflow_menu.dart';
 import 'package:paintroid/ui/pages/landing_page/components/project_list_tile.dart';
 import 'package:paintroid/ui/pages/landing_page/components/project_overflow_menu.dart';
+import 'package:paintroid/ui/pages/landing_page/components/search_toggle_button.dart';
+import 'package:paintroid/ui/pages/landing_page/components/search_text_field.dart';
 import 'package:paintroid/ui/shared/icon_svg.dart';
 import 'package:paintroid/ui/theme/theme.dart';
 import 'package:paintroid/ui/utils/toast_utils.dart';
@@ -36,6 +38,18 @@ class _LandingPageState extends ConsumerState<LandingPage> {
   late ProjectDatabase database;
   late IFileService fileService;
   late IImageService imageService;
+
+  bool _isSearchActive = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
 
   Future<List<Project>> _getProjects() async {
     return database.projectDAO.getProjects();
@@ -80,6 +94,25 @@ class _LandingPageState extends ConsumerState<LandingPage> {
     }
   }
 
+  List<Project> _filterProjects(List<Project> projects) {
+    // print(projects.first.name);
+    // List<Project> selectedProjects = [];
+    // for (var project in projects) {
+    //   print(project.name + "  " + _searchQuery.toLowerCase());
+    //   print(project.name.toLowerCase().contains(_searchQuery.toLowerCase()));
+    //   if (project.name.toLowerCase().contains(_searchQuery.toLowerCase())) {
+    //     selectedProjects.add(project);
+    //   }
+    // }
+    // print(_searchQuery);
+    if (_searchQuery.isEmpty) return projects;
+    // return selectedProjects;
+    return projects
+        .where((project) =>
+            project.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     ToastContext().init(context);
@@ -99,34 +132,63 @@ class _LandingPageState extends ConsumerState<LandingPage> {
     return Scaffold(
       backgroundColor: PaintroidTheme.of(context).primaryColor,
       appBar: AppBar(
-        title: Text(widget.title),
-        actions: const [MainOverflowMenu()],
+        title: _isSearchActive
+            ? SearchTextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+              )
+            : Text(widget.title),
+        actions: [
+          SearchToggleButton(
+            isSearchActive: _isSearchActive,
+            onSearchStart: () {
+              setState(() {
+                _isSearchActive = true;
+              });
+            },
+            onSearchEnd: () {
+              setState(() {
+                _isSearchActive = false;
+                _searchQuery = '';
+                _searchController.clear();
+              });
+            },
+          ),
+          if (!_isSearchActive) const MainOverflowMenu(),
+        ],
       ),
       body: FutureBuilder(
         future: _getProjects(),
         builder: (BuildContext context, AsyncSnapshot<List<Project>> snapshot) {
           if (snapshot.connectionState == ConnectionState.done &&
               snapshot.hasData) {
-            if (snapshot.data!.isNotEmpty) {
-              latestModifiedProject = snapshot.data![0];
+            final filteredProjects = _filterProjects(snapshot.data!);
+            if (filteredProjects.isNotEmpty) {
+              latestModifiedProject = filteredProjects[0];
             }
             return Column(
               children: [
-                Flexible(
-                  flex: 2,
-                  child: _ProjectPreview(
-                      ioHandler: ioHandler,
-                      imageService: imageService,
-                      latestModifiedProject: latestModifiedProject,
-                      onProjectPreviewTap: () {
-                        if (latestModifiedProject != null) {
-                          _openProject(latestModifiedProject, ioHandler, ref);
-                        } else {
-                          _clearCanvas();
-                          _navigateToPocketPaint();
-                        }
-                      }),
-                ),
+                if (!_isSearchActive)
+                  Flexible(
+                    flex: 2,
+                    child: _ProjectPreview(
+                        ioHandler: ioHandler,
+                        imageService: imageService,
+                        latestModifiedProject: latestModifiedProject,
+                        onProjectPreviewTap: () {
+                          if (latestModifiedProject != null) {
+                            _openProject(latestModifiedProject, ioHandler, ref);
+                          } else {
+                            _clearCanvas();
+                            _navigateToPocketPaint();
+                          }
+                        }),
+                  ),
                 Container(
                   color: PaintroidTheme.of(context).primaryContainerColor,
                   padding: const EdgeInsets.all(20),
@@ -146,21 +208,18 @@ class _LandingPageState extends ConsumerState<LandingPage> {
                   flex: 3,
                   child: ListView.builder(
                     itemBuilder: (context, index) {
-                      if (index != 0) {
-                        Project project = snapshot.data![index];
-                        return ProjectListTile(
-                          project: project,
-                          imageService: imageService,
-                          index: index,
-                          onTap: () async {
-                            _clearCanvas();
-                            _openProject(project, ioHandler, ref);
-                          },
-                        );
-                      }
-                      return Container();
+                      Project project = filteredProjects[index];
+                      return ProjectListTile(
+                        project: project,
+                        imageService: imageService,
+                        index: index,
+                        onTap: () async {
+                          _clearCanvas();
+                          _openProject(project, ioHandler, ref);
+                        },
+                      );
                     },
-                    itemCount: snapshot.data?.length,
+                    itemCount: filteredProjects.length,
                   ),
                 ),
               ],
@@ -174,36 +233,38 @@ class _LandingPageState extends ConsumerState<LandingPage> {
           }
         },
       ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          CustomActionButton(
-            heroTag: 'import_image',
-            icon: Icons.file_download,
-            hint: 'Load image',
-            onPressed: () async {
-              final bool imageLoaded =
-                  await ioHandler.loadImage(context, this, false);
-              if (imageLoaded && mounted) {
-                _navigateToPocketPaint();
-              }
-            },
-          ),
-          const SizedBox(
-            height: 10,
-          ),
-          CustomActionButton(
-            key: const ValueKey(WidgetIdentifier.newImageActionButton),
-            heroTag: 'new_image',
-            icon: Icons.add,
-            hint: 'New image',
-            onPressed: () async {
-              _clearCanvas();
-              _navigateToPocketPaint();
-            },
-          ),
-        ],
-      ),
+      floatingActionButton: _isSearchActive
+          ? null
+          : Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                CustomActionButton(
+                  heroTag: 'import_image',
+                  icon: Icons.file_download,
+                  hint: 'Load image',
+                  onPressed: () async {
+                    final bool imageLoaded =
+                        await ioHandler.loadImage(context, this, false);
+                    if (imageLoaded && mounted) {
+                      _navigateToPocketPaint();
+                    }
+                  },
+                ),
+                const SizedBox(
+                  height: 10,
+                ),
+                CustomActionButton(
+                  key: const ValueKey(WidgetIdentifier.newImageActionButton),
+                  heroTag: 'new_image',
+                  icon: Icons.add,
+                  hint: 'New image',
+                  onPressed: () async {
+                    _clearCanvas();
+                    _navigateToPocketPaint();
+                  },
+                ),
+              ],
+            ),
     );
   }
 }
