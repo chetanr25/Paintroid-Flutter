@@ -246,7 +246,6 @@ class _LandingPageState extends ConsumerState<LandingPage> {
               ],
             );
           } else {
-            return SizedBox();
             return Center(
               child: CircularProgressIndicator(
                 backgroundColor: PaintroidTheme.of(context).fabBackgroundColor,

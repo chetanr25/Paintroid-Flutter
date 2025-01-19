@@ -44,10 +44,6 @@ class SearchTextField extends StatelessWidget {
                 ),
                 onChanged: onChanged,
               ),
-              Divider(
-                color:
-                    PaintroidTheme.of(context).onSurfaceColor.withOpacity(0.6),
-              ),
             ],
           ),
         ),
