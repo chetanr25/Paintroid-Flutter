@@ -19,9 +19,12 @@ import 'package:paintroid/ui/pages/landing_page/components/image_preview.dart';
 import 'package:paintroid/ui/pages/landing_page/components/main_overflow_menu.dart';
 import 'package:paintroid/ui/pages/landing_page/components/project_list_tile.dart';
 import 'package:paintroid/ui/pages/landing_page/components/project_overflow_menu.dart';
+import 'package:paintroid/ui/pages/landing_page/components/search_toggle_button.dart';
+import 'package:paintroid/ui/pages/landing_page/components/search_text_field.dart';
 import 'package:paintroid/ui/shared/icon_svg.dart';
 import 'package:paintroid/ui/theme/theme.dart';
 import 'package:paintroid/ui/utils/toast_utils.dart';
+import 'package:paintroid/core/models/sort_option.dart';
 
 class LandingPage extends ConsumerStatefulWidget {
   final String title;
@@ -36,6 +39,20 @@ class _LandingPageState extends ConsumerState<LandingPage> {
   late ProjectDatabase database;
   late IFileService fileService;
   late IImageService imageService;
+
+  bool _isSearchActive = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  bool _isSortByName = false;
+  SortOption _currentSortOption = SortOption.dateModifiedNewest;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
 
   Future<List<Project>> _getProjects() async {
     return database.projectDAO.getProjects();
@@ -80,6 +97,36 @@ class _LandingPageState extends ConsumerState<LandingPage> {
     }
   }
 
+  List<Project> _filterProjects(List<Project> projects) {
+    List<Project> filteredProjects = projects;
+
+    if (_searchQuery.isNotEmpty) {
+      filteredProjects = filteredProjects
+          .where((project) =>
+              project.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+          .toList();
+    }
+
+    filteredProjects.sort((a, b) {
+      switch (_currentSortOption) {
+        case SortOption.nameAsc:
+          return a.name.compareTo(b.name);
+        case SortOption.nameDesc:
+          return b.name.compareTo(a.name);
+        case SortOption.dateModifiedNewest:
+          return b.lastModified.compareTo(a.lastModified);
+        case SortOption.dateModifiedOldest:
+          return a.lastModified.compareTo(b.lastModified);
+        case SortOption.dateCreatedNewest:
+          return b.creationDate.compareTo(a.creationDate);
+        case SortOption.dateCreatedOldest:
+          return a.creationDate.compareTo(b.creationDate);
+      }
+    });
+
+    return filteredProjects;
+  }
+
   @override
   Widget build(BuildContext context) {
     ToastContext().init(context);
@@ -99,34 +146,70 @@ class _LandingPageState extends ConsumerState<LandingPage> {
     return Scaffold(
       backgroundColor: PaintroidTheme.of(context).primaryColor,
       appBar: AppBar(
-        title: Text(widget.title),
-        actions: const [MainOverflowMenu()],
+        title: _isSearchActive
+            ? SearchTextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+                currentSortOption: _currentSortOption,
+                onSortOptionSelected: (option) {
+                  FocusScope.of(context).unfocus();
+                  setState(() {
+                    _currentSortOption = option;
+                  });
+                },
+              )
+            : Text(widget.title),
+        actions: [
+          SearchToggleButton(
+            isSearchActive: _isSearchActive,
+            onSearchStart: () {
+              setState(() {
+                _isSearchActive = true;
+              });
+            },
+            onSearchEnd: () {
+              setState(() {
+                _isSearchActive = false;
+                _searchQuery = '';
+                _searchController.clear();
+              });
+            },
+          ),
+          if (!_isSearchActive) const MainOverflowMenu(),
+        ],
       ),
       body: FutureBuilder(
         future: _getProjects(),
         builder: (BuildContext context, AsyncSnapshot<List<Project>> snapshot) {
           if (snapshot.connectionState == ConnectionState.done &&
               snapshot.hasData) {
-            if (snapshot.data!.isNotEmpty) {
-              latestModifiedProject = snapshot.data![0];
+            final filteredProjects = _filterProjects(snapshot.data!);
+            if (filteredProjects.isNotEmpty) {
+              latestModifiedProject = filteredProjects[0];
             }
             return Column(
               children: [
-                Flexible(
-                  flex: 2,
-                  child: _ProjectPreview(
-                      ioHandler: ioHandler,
-                      imageService: imageService,
-                      latestModifiedProject: latestModifiedProject,
-                      onProjectPreviewTap: () {
-                        if (latestModifiedProject != null) {
-                          _openProject(latestModifiedProject, ioHandler, ref);
-                        } else {
-                          _clearCanvas();
-                          _navigateToPocketPaint();
-                        }
-                      }),
-                ),
+                if (!_isSearchActive)
+                  Flexible(
+                    flex: 2,
+                    child: _ProjectPreview(
+                        ioHandler: ioHandler,
+                        imageService: imageService,
+                        latestModifiedProject: latestModifiedProject,
+                        onProjectPreviewTap: () {
+                          if (latestModifiedProject != null) {
+                            _openProject(latestModifiedProject, ioHandler, ref);
+                          } else {
+                            _clearCanvas();
+                            _navigateToPocketPaint();
+                          }
+                        }),
+                  ),
                 Container(
                   color: PaintroidTheme.of(context).primaryContainerColor,
                   padding: const EdgeInsets.all(20),
@@ -146,26 +229,24 @@ class _LandingPageState extends ConsumerState<LandingPage> {
                   flex: 3,
                   child: ListView.builder(
                     itemBuilder: (context, index) {
-                      if (index != 0) {
-                        Project project = snapshot.data![index];
-                        return ProjectListTile(
-                          project: project,
-                          imageService: imageService,
-                          index: index,
-                          onTap: () async {
-                            _clearCanvas();
-                            _openProject(project, ioHandler, ref);
-                          },
-                        );
-                      }
-                      return Container();
+                      Project project = filteredProjects[index];
+                      return ProjectListTile(
+                        project: project,
+                        imageService: imageService,
+                        index: index,
+                        onTap: () async {
+                          _clearCanvas();
+                          _openProject(project, ioHandler, ref);
+                        },
+                      );
                     },
-                    itemCount: snapshot.data?.length,
+                    itemCount: filteredProjects.length,
                   ),
                 ),
               ],
             );
           } else {
+            return SizedBox();
             return Center(
               child: CircularProgressIndicator(
                 backgroundColor: PaintroidTheme.of(context).fabBackgroundColor,
