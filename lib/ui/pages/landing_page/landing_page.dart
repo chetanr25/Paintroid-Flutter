@@ -12,6 +12,7 @@ import 'package:paintroid/core/providers/object/image_service.dart';
 import 'package:paintroid/core/providers/object/io_handler.dart';
 import 'package:paintroid/core/providers/state/canvas_state_provider.dart';
 import 'package:paintroid/core/providers/state/workspace_state_notifier.dart';
+import 'package:paintroid/core/providers/object/search_filter_sort_provider.dart';
 import 'package:paintroid/core/utils/load_image_failure.dart';
 import 'package:paintroid/core/utils/widget_identifier.dart';
 import 'package:paintroid/ui/pages/landing_page/components/custom_action_button.dart';
@@ -40,12 +41,8 @@ class _LandingPageState extends ConsumerState<LandingPage> {
   late IFileService fileService;
   late IImageService imageService;
 
-  bool _isSearchActive = false;
-  String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-
-  SortOption _currentSortOption = SortOption.dateModifiedNewest;
 
   @override
   void dispose() {
@@ -99,16 +96,18 @@ class _LandingPageState extends ConsumerState<LandingPage> {
 
   List<Project> _filterProjects(List<Project> projects) {
     List<Project> filteredProjects = projects;
+    final searchQuery = ref.watch(searchQueryProvider);
+    final sortOption = ref.watch(sortOptionProvider);
 
-    if (_searchQuery.isNotEmpty) {
+    if (searchQuery.isNotEmpty) {
       filteredProjects = filteredProjects
           .where((project) =>
-              project.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+              project.name.toLowerCase().contains(searchQuery.toLowerCase()))
           .toList();
     }
 
     filteredProjects.sort((a, b) {
-      switch (_currentSortOption) {
+      switch (sortOption) {
         case SortOption.nameAsc:
           return a.name.compareTo(b.name);
         case SortOption.nameDesc:
@@ -143,50 +142,52 @@ class _LandingPageState extends ConsumerState<LandingPage> {
     fileService = ref.watch(IFileService.provider);
     imageService = ref.watch(IImageService.provider);
 
+    final isSearchActive = ref.watch(searchActiveProvider);
+    final currentSortOption = ref.watch(sortOptionProvider);
+
     return Scaffold(
       backgroundColor: PaintroidTheme.of(context).primaryColor,
       appBar: AppBar(
-        title: _isSearchActive
+        title: isSearchActive
             ? SearchTextField(
                 controller: _searchController,
                 focusNode: _searchFocusNode,
                 onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
-                  });
+                  ref.read(searchQueryProvider.notifier).state = value;
                 },
-                currentSortOption: _currentSortOption,
+                currentSortOption: currentSortOption,
                 onSortOptionSelected: (option) {
-                  FocusScope.of(context).unfocus();
-                  setState(() {
-                    _currentSortOption = option;
-                  });
+                  ref.read(sortOptionProvider.notifier).state = option;
                 },
-
               )
             : Text(widget.title),
         actions: [
           SearchToggleButton(
-            isSearchActive: _isSearchActive,
+            isSearchActive: isSearchActive,
             onSearchStart: () {
-              setState(() {
-                _isSearchActive = true;
-              });
+              ref.read(searchActiveProvider.notifier).state = true;
             },
             onSearchEnd: () {
-              setState(() {
-                _isSearchActive = false;
-                _searchQuery = '';
-                _searchController.clear();
-              });
+              ref.read(searchActiveProvider.notifier).state = false;
+              ref.read(searchQueryProvider.notifier).state = '';
+              _searchController.clear();
             },
           ),
-          if (!_isSearchActive) const MainOverflowMenu(),
+          if (!isSearchActive) const MainOverflowMenu(),
         ],
       ),
       body: FutureBuilder(
         future: _getProjects(),
         builder: (BuildContext context, AsyncSnapshot<List<Project>> snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !isSearchActive) {
+            return Center(
+              child: CircularProgressIndicator(
+                backgroundColor: PaintroidTheme.of(context).fabBackgroundColor,
+              ),
+            );
+          }
+
           if (snapshot.connectionState == ConnectionState.done &&
               snapshot.hasData) {
             final filteredProjects = _filterProjects(snapshot.data!);
@@ -195,7 +196,7 @@ class _LandingPageState extends ConsumerState<LandingPage> {
             }
             return Column(
               children: [
-                if (!_isSearchActive)
+                if (!isSearchActive)
                   Flexible(
                     flex: 2,
                     child: _ProjectPreview(
@@ -247,15 +248,11 @@ class _LandingPageState extends ConsumerState<LandingPage> {
               ],
             );
           } else {
-            return Center(
-              child: CircularProgressIndicator(
-                backgroundColor: PaintroidTheme.of(context).fabBackgroundColor,
-              ),
-            );
+            return const SizedBox.shrink();
           }
         },
       ),
-      floatingActionButton: _isSearchActive
+      floatingActionButton: isSearchActive
           ? null
           : Column(
               mainAxisAlignment: MainAxisAlignment.end,
