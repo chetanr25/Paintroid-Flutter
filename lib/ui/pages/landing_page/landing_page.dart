@@ -44,7 +44,7 @@ class _LandingPageState extends ConsumerState<LandingPage> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  bool _isSortByName = false;
+
   SortOption _currentSortOption = SortOption.dateModifiedNewest;
 
   @override
@@ -162,6 +162,7 @@ class _LandingPageState extends ConsumerState<LandingPage> {
                     _currentSortOption = option;
                   });
                 },
+
               )
             : Text(widget.title),
         actions: [
@@ -254,36 +255,38 @@ class _LandingPageState extends ConsumerState<LandingPage> {
           }
         },
       ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          CustomActionButton(
-            heroTag: 'import_image',
-            icon: Icons.file_download,
-            hint: 'Load image',
-            onPressed: () async {
-              final bool imageLoaded =
-                  await ioHandler.loadImage(context, this, false);
-              if (imageLoaded && mounted) {
-                _navigateToPocketPaint();
-              }
-            },
-          ),
-          const SizedBox(
-            height: 10,
-          ),
-          CustomActionButton(
-            key: const ValueKey(WidgetIdentifier.newImageActionButton),
-            heroTag: 'new_image',
-            icon: Icons.add,
-            hint: 'New image',
-            onPressed: () async {
-              _clearCanvas();
-              _navigateToPocketPaint();
-            },
-          ),
-        ],
-      ),
+      floatingActionButton: _isSearchActive
+          ? null
+          : Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                CustomActionButton(
+                  heroTag: 'import_image',
+                  icon: Icons.file_download,
+                  hint: 'Load image',
+                  onPressed: () async {
+                    final bool imageLoaded =
+                        await ioHandler.loadImage(context, this, false);
+                    if (imageLoaded && mounted) {
+                      _navigateToPocketPaint();
+                    }
+                  },
+                ),
+                const SizedBox(
+                  height: 10,
+                ),
+                CustomActionButton(
+                  key: const ValueKey(WidgetIdentifier.newImageActionButton),
+                  heroTag: 'new_image',
+                  icon: Icons.add,
+                  hint: 'New image',
+                  onPressed: () async {
+                    _clearCanvas();
+                    _navigateToPocketPaint();
+                  },
+                ),
+              ],
+            ),
     );
   }
 }
