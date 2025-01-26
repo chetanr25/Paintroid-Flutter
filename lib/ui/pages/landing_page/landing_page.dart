@@ -24,6 +24,7 @@ import 'package:paintroid/ui/pages/landing_page/components/search_text_field.dar
 import 'package:paintroid/ui/shared/icon_svg.dart';
 import 'package:paintroid/ui/theme/theme.dart';
 import 'package:paintroid/ui/utils/toast_utils.dart';
+import 'package:paintroid/core/models/sort_option.dart';
 
 class LandingPage extends ConsumerStatefulWidget {
   final String title;
@@ -43,6 +44,8 @@ class _LandingPageState extends ConsumerState<LandingPage> {
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+
+  SortOption _currentSortOption = SortOption.dateModifiedNewest;
 
   @override
   void dispose() {
@@ -95,11 +98,33 @@ class _LandingPageState extends ConsumerState<LandingPage> {
   }
 
   List<Project> _filterProjects(List<Project> projects) {
-    if (_searchQuery.isEmpty) return projects;
-    return projects
-        .where((project) =>
-            project.name.toLowerCase().contains(_searchQuery.toLowerCase()))
-        .toList();
+    List<Project> filteredProjects = projects;
+
+    if (_searchQuery.isNotEmpty) {
+      filteredProjects = filteredProjects
+          .where((project) =>
+              project.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+          .toList();
+    }
+
+    filteredProjects.sort((a, b) {
+      switch (_currentSortOption) {
+        case SortOption.nameAsc:
+          return a.name.compareTo(b.name);
+        case SortOption.nameDesc:
+          return b.name.compareTo(a.name);
+        case SortOption.dateModifiedNewest:
+          return b.lastModified.compareTo(a.lastModified);
+        case SortOption.dateModifiedOldest:
+          return a.lastModified.compareTo(b.lastModified);
+        case SortOption.dateCreatedNewest:
+          return b.creationDate.compareTo(a.creationDate);
+        case SortOption.dateCreatedOldest:
+          return a.creationDate.compareTo(b.creationDate);
+      }
+    });
+
+    return filteredProjects;
   }
 
   @override
@@ -130,6 +155,14 @@ class _LandingPageState extends ConsumerState<LandingPage> {
                     _searchQuery = value;
                   });
                 },
+                currentSortOption: _currentSortOption,
+                onSortOptionSelected: (option) {
+                  FocusScope.of(context).unfocus();
+                  setState(() {
+                    _currentSortOption = option;
+                  });
+                },
+
               )
             : Text(widget.title),
         actions: [
