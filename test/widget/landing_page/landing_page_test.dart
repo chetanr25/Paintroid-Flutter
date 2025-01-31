@@ -23,6 +23,7 @@ import 'package:paintroid/core/providers/state/canvas_state_provider.dart';
 import 'package:paintroid/ui/pages/landing_page/components/main_overflow_menu.dart';
 import 'package:paintroid/ui/pages/landing_page/components/project_list_tile.dart';
 import 'package:paintroid/ui/pages/landing_page/components/project_overflow_menu.dart';
+import 'package:paintroid/ui/pages/landing_page/components/search_text_field.dart';
 import 'package:paintroid/ui/pages/workspace_page/components/top_bar/overflow_menu.dart';
 import 'package:paintroid/ui/pages/workspace_page/components/top_bar/top_app_bar.dart';
 import 'package:paintroid/ui/shared/dialogs/about_dialog.dart';
@@ -668,6 +669,151 @@ void main() {
       await tester.pump();
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Should show search bar when search icon is tapped',
+    (tester) async {
+      when(database.projectDAO).thenReturn(dao);
+      when(dao.getProjects()).thenAnswer((_) => Future.value([]));
+      await tester.pumpWidget(sut);
+      await tester.pumpAndSettle();
+      verify(database.projectDAO);
+      verify(dao.getProjects());
+
+      final searchIcon = find.byIcon(Icons.search);
+      expect(searchIcon, findsOneWidget);
+
+      await tester.tap(searchIcon);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SearchTextField), findsOneWidget);
+      expect(find.byIcon(Icons.close), findsOneWidget);
+      expect(find.text('Search projects...'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Should hide search bar when close icon is tapped',
+    (tester) async {
+      when(database.projectDAO).thenReturn(dao);
+      when(dao.getProjects()).thenAnswer((_) => Future.value([]));
+      await tester.pumpWidget(sut);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.search));
+      await tester.pumpAndSettle();
+      expect(find.byType(SearchTextField), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.byType(SearchTextField), findsNothing);
+      expect(find.text('Pocket Paint'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Should filter projects based on search query',
+    (tester) async {
+      when(database.projectDAO).thenReturn(dao);
+      when(dao.getProjects()).thenAnswer((_) => Future.value(projects));
+      when(imageService.getProjectPreview(filePath))
+          .thenReturn(Result.ok(testFile.readAsBytesSync()));
+      await tester.pumpWidget(sut);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.search));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'project1');
+      await tester.pumpAndSettle();
+
+      expect(find.text('project1'), findsOneWidget);
+      expect(find.text('project2'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Should show sort options menu when sort icon is tapped',
+    (tester) async {
+      when(database.projectDAO).thenReturn(dao);
+      when(dao.getProjects()).thenAnswer((_) => Future.value([]));
+      await tester.pumpWidget(sut);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.search));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.sort));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Name (A to Z)'), findsOneWidget);
+      expect(find.text('Name (Z to A)'), findsOneWidget);
+      expect(find.text('Last Modified (Newest)'), findsOneWidget);
+      expect(find.text('Last Modified (Oldest)'), findsOneWidget);
+      expect(find.text('Date Created (Newest)'), findsOneWidget);
+      expect(find.text('Date Created (Oldest)'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Should sort projects by name when name sort option is selected',
+    (tester) async {
+      final projectsToSort = [
+        createProject('Project first'),
+        createProject('Project second'),
+        createProject('Project third'),
+      ];
+
+      when(database.projectDAO).thenReturn(dao);
+      when(deviceService.getSizeInPixels())
+          .thenAnswer((_) => Future.value(const Size(1080, 1920)));
+      when(dao.getProjects()).thenAnswer((_) => Future.value(projectsToSort));
+      when(imageService.getProjectPreview(filePath))
+          .thenReturn(Result.ok(testFile.readAsBytesSync()));
+      await tester.pumpWidget(sut);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.search));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.sort));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Name (A to Z)'));
+      await tester.pumpAndSettle();
+
+      final projectNames = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((widget) => widget.data)
+          .where((text) =>
+              text == 'Project first' ||
+              text == 'Project second' ||
+              text == 'Project third')
+          .toList();
+
+      expect(projectNames[0], equals('Project second'));
+      expect(projectNames[1], equals('Project third'));
+    },
+  );
+
+  testWidgets(
+    'Should hide floating action buttons when search is active',
+    (tester) async {
+      when(database.projectDAO).thenReturn(dao);
+      when(dao.getProjects()).thenAnswer((_) => Future.value([]));
+      await tester.pumpWidget(sut);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FloatingActionButton), findsNWidgets(2));
+
+      await tester.tap(find.byIcon(Icons.search));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FloatingActionButton), findsNothing);
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.byType(FloatingActionButton), findsNWidgets(2));
     },
   );
 }

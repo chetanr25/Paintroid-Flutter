@@ -20,32 +20,26 @@ class SearchTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return Row(
       children: [
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                focusNode: focusNode,
-                autofocus: true,
-                style:
-                    TextStyle(color: PaintroidTheme.of(context).onSurfaceColor),
-                decoration: InputDecoration(
-                  hintText: 'Search projects...',
-                  hintStyle: TextStyle(
-                    color: PaintroidTheme.of(context)
-                        .onSurfaceColor
-                        .withOpacity(0.6),
-                  ),
-                  border: InputBorder.none,
-                ),
-                onChanged: onChanged,
+          child: TextField(
+            controller: controller,
+            focusNode: focusNode,
+            autofocus: true,
+            style: TextStyle(
+              color: PaintroidTheme.of(context).onSurfaceColor,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Search projects...',
+              hintStyle: TextStyle(
+                color:
+                    PaintroidTheme.of(context).onSurfaceColor.withOpacity(0.6),
               ),
-            ],
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+            onChanged: onChanged,
           ),
         ),
         PopupMenuButton<SortOption>(
@@ -68,14 +62,18 @@ class SearchTextField extends StatelessWidget {
                         size: 18,
                       ),
                       const SizedBox(width: 8),
-                      Text(option.label),
+                      Flexible(
+                        child: Text(
+                          option.label,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               )
               .toList(),
         ),
-        const SizedBox(width: 2),
       ],
     );
   }

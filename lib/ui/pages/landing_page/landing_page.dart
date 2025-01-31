@@ -231,6 +231,9 @@ class _LandingPageState extends ConsumerState<LandingPage> {
                   flex: 3,
                   child: ListView.builder(
                     itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return Container();
+                      }
                       Project project = filteredProjects[index];
                       return ProjectListTile(
                         project: project,
